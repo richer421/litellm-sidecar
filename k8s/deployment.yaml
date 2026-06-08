@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-sidecar-secrets
+  namespace: ai-inference
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: ""
+  OPENAI_API_KEY: ""
+  DEEPSEEK_API_KEY: ""
+  LITELLM_MASTER_KEY: ""
+---
+# LiteLLM 主服务部署（UI + 日志聚合）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-main
+  namespace: ai-inference
+  labels:
+    app: litellm-main
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-main
+  template:
+    metadata:
+      labels:
+        app: litellm-main
+    spec:
+      containers:
+        - name: litellm-main
+          image: ghcr.io/richer421/litellm-sidecar:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: LITELLM_CONFIG
+              value: /app/config/litellm_config.yaml
+            - name: LITELLM_MAIN_URL
+              value: "http://litellm-main:4000"  # 自己就是主服务
+            - name: PORT
+              value: "4000"
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: LITELLM_MASTER_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: OPENAI_API_KEY
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: DEEPSEEK_API_KEY
+          # 主服务需要 DB 存日志
+          volumeMounts:
+            - name: litellm-db
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: litellm-db
+          persistentVolumeClaim:
+            claimName: litellm-main-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-main
+  namespace: ai-inference
+spec:
+  selector:
+    app: litellm-main
+  ports:
+    - port: 4000
+      targetPort: 4000
+  type: ClusterIP
+---
+# PVC for LiteLLM main DB
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: litellm-main-db-pvc
+  namespace: ai-inference
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# LiteLLM Sidecar DaemonSet（每个节点跑一个，跟业务 Pod 同节点）
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: litellm-sidecar
+  namespace: ai-inference
+  labels:
+    app: litellm-sidecar
+spec:
+  selector:
+    matchLabels:
+      app: litellm-sidecar
+  template:
+    metadata:
+      labels:
+        app: litellm-sidecar
+    spec:
+      containers:
+        - name: litellm-sidecar
+          image: ghcr.io/richer421/litellm-sidecar:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: LITELLM_CONFIG
+              value: /app/config/litellm_config.yaml
+            - name: LITELLM_MAIN_URL
+              value: "http://litellm-main:4000"
+            - name: LITELLM_LOG_DIR
+              value: /app/logs/spool
+            - name: PORT
+              value: "4000"
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: LITELLM_MASTER_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: OPENAI_API_KEY
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-sidecar-secrets
+                  key: DEEPSEEK_API_KEY
+          # Sidecar 日志缓冲用本地 hostPath（同节点同目录，重启不丢）
+          volumeMounts:
+            - name: spool-dir
+              mountPath: /app/logs/spool
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+      volumes:
+        - name: spool-dir
+          hostPath:
+            path: /var/litellm-sidecar/spool
+            type: DirectoryOrCreate

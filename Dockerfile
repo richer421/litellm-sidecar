@@ -10,8 +10,7 @@ WORKDIR /app
 # 安装依赖（分层构建，依赖层可缓存）
 RUN pip install --no-cache-dir \
     litellm[proxy]==1.76.0 \
-    requests>=2.31.0 \
-    prisma==2.26.0
+    requests>=2.31.0
 
 # 复制 sidecar 自定义模块
 COPY callbacks/ /app/callbacks/
@@ -29,7 +28,6 @@ ENV LITELLM_PUSH_TIMEOUT=5
 ENV LITELLM_MAX_RETRY_HOURS=72
 ENV LITELLM_RESCAN_INTERVAL=30
 ENV LITELLM_MASK_API_KEYS=true
-ENV LITELLM_MASTER_KEY=""
 ENV PORT=4000
 
 # 健康检查
