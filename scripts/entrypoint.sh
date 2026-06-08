@@ -26,5 +26,4 @@ echo "Starting LiteLLM proxy server..."
 exec litellm \
     --config "${LITELLM_CONFIG}" \
     --port "${PORT}" \
-    --host 0.0.0.0 \
-    ${LITELLM_MASTER_KEY:+--master_key "${LITELLM_MASTER_KEY}"}
+    --host 0.0.0.0

@@ -36,6 +36,9 @@ model_list:
       api_key: os.environ/DEEPSEEK_API_KEY
 
 general_settings:
+  # Master Key（通过环境变量传入）
+  master_key: os.environ/LITELLM_MASTER_KEY
+
   # 异步回调：本地落盘 + 异步推送主服务
   success_callback: ["custom_async_logger"]
   failure_callback: ["custom_async_logger"]
