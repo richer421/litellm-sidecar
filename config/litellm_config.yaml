@@ -1,0 +1,63 @@
+# LiteLLM Sidecar Proxy Config
+# Sidecar 模式：本地代理请求到上游模型，异步推送日志到主服务
+
+model_list:
+  # Claude 模型
+  - model_name: claude-3.5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # OpenAI 模型
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # DeepSeek 模型（适合东南亚集群的低成本选项）
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: deepseek-reasoner
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+general_settings:
+  # 异步回调：本地落盘 + 异步推送主服务
+  success_callback: ["custom_async_logger"]
+  failure_callback: ["custom_async_logger"]
+
+  # 不在 sidecar 本地存 DB，日志全推主服务
+  store_model_in_db: false
+
+  # Drop 不支持的参数，避免报错
+  drop_params: true
+
+litellm_settings:
+  # 请求超时（秒）
+  request_timeout: 120
+  # 开启 fallback（主模型失败时自动降级）
+  num_retries: 2
+  allowed_fails: 3
+  fallbacks:
+    - claude-3.5-sonnet: ["deepseek-chat", "gpt-4o-mini"]
+    - gpt-4o: ["claude-3.5-sonnet", "deepseek-chat"]
+
+environment_variables:
+  # 主服务地址（sidecar 异步推送目标）
+  LITELLM_MAIN_URL: os.environ/LITELLM_MAIN_URL
+  # 本地日志缓冲目录
+  LITELLM_LOG_DIR: /app/logs/spool
